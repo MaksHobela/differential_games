@@ -1,3 +1,0 @@
-/media/myron/Data/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/CMakeFiles/program.dir
-/media/myron/Data/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/CMakeFiles/edit_cache.dir
-/media/myron/Data/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/CMakeFiles/rebuild_cache.dir

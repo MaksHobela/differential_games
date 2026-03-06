@@ -1,0 +1,26 @@
+[
+{
+  "directory": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/build",
+  "command": "\"E:\\Program Files\\Other\\msys64\\mingw64\\bin\\g++.exe\"  @CMakeFiles/program.dir/includes_CXX.rsp -g -std=gnu++20 -o CMakeFiles\\program.dir\\src\\GameManager.cpp.obj -c E:\\Users\\Myron\\Documents\\Documents2\\Universities\\UCU\\2\\АКС\\Project\\differential_games\\src\\GameManager.cpp",
+  "file": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/src/GameManager.cpp",
+  "output": "CMakeFiles/program.dir/src/GameManager.cpp.obj"
+},
+{
+  "directory": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/build",
+  "command": "\"E:\\Program Files\\Other\\msys64\\mingw64\\bin\\g++.exe\"  @CMakeFiles/program.dir/includes_CXX.rsp -g -std=gnu++20 -o CMakeFiles\\program.dir\\src\\escaper.cpp.obj -c E:\\Users\\Myron\\Documents\\Documents2\\Universities\\UCU\\2\\АКС\\Project\\differential_games\\src\\escaper.cpp",
+  "file": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/src/escaper.cpp",
+  "output": "CMakeFiles/program.dir/src/escaper.cpp.obj"
+},
+{
+  "directory": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/build",
+  "command": "\"E:\\Program Files\\Other\\msys64\\mingw64\\bin\\g++.exe\"  @CMakeFiles/program.dir/includes_CXX.rsp -g -std=gnu++20 -o CMakeFiles\\program.dir\\src\\pursuer.cpp.obj -c E:\\Users\\Myron\\Documents\\Documents2\\Universities\\UCU\\2\\АКС\\Project\\differential_games\\src\\pursuer.cpp",
+  "file": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/src/pursuer.cpp",
+  "output": "CMakeFiles/program.dir/src/pursuer.cpp.obj"
+},
+{
+  "directory": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/build",
+  "command": "\"E:\\Program Files\\Other\\msys64\\mingw64\\bin\\g++.exe\"  @CMakeFiles/program.dir/includes_CXX.rsp -g -std=gnu++20 -o CMakeFiles\\program.dir\\src\\main.cpp.obj -c E:\\Users\\Myron\\Documents\\Documents2\\Universities\\UCU\\2\\АКС\\Project\\differential_games\\src\\main.cpp",
+  "file": "E:/Users/Myron/Documents/Documents2/Universities/UCU/2/АКС/Project/differential_games/src/main.cpp",
+  "output": "CMakeFiles/program.dir/src/main.cpp.obj"
+}
+]

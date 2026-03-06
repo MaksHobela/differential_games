@@ -1,0 +1,1 @@
+/usr/bin/c++ -fsanitize=address -g CMakeFiles/program.dir/src/GameManager.cpp.o CMakeFiles/program.dir/src/escaper.cpp.o CMakeFiles/program.dir/src/pursuer.cpp.o CMakeFiles/program.dir/src/main.cpp.o -o program 

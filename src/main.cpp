@@ -1,33 +1,66 @@
-#include "GameManager.hpp"
-#include <vector>
 #include <iostream>
+#include <vector>
 #include <algorithm>
+#include <thread>
+#include <ctime>
+#include <iomanip>
+#include "GameManager.hpp"
+
+struct Individual {
+    std::vector<Coordinates> genes;
+    float fitness = 0;
+    double time = 0;
+    bool captured = false;
+};
+
+void evaluate(Individual& ind, float radius) {
+    try {
+        // Створюємо менеджер: n_ppo наздоганяють 1 шахед
+        GameManager gm(ind.genes.size(), 1, radius);
+        
+        // Запускаємо симуляцію (код GameManager сам ініціалізує позиції випадково, 
+        // тому ми переписуємо їх на наші гени)
+        // Примітка: твій GameManager не має методу set_pursuer_positions, 
+        // тому ми розраховуємо на логіку симуляції всередині run_single_simulation
+        
+        GameResult res = gm.run_single_simulation(1, 5000);
+        
+        ind.time = res.total_time_sec;
+        ind.captured = (res.outcome == "Pursuers have won");
+        ind.fitness = ind.captured ? (10000.0f / (float)(res.total_time_sec * ind.genes.size())) : 0.0001f;
+    } catch (...) {
+        ind.fitness = 0.0f;
+    }
+}
 
 int main() {
-    int num_sims = 8; 
-    try {
-    GameManager gm(3, 1, 0.8f);
-    std::vector<GameResult> all_runs;
+    srand(time(NULL));
+    const int pop_size = 20;
+    const int generations = 10;
+    std::vector<Individual> population(pop_size);
 
-    std::cout << "Starting " << num_sims << " simulations..." << std::endl;
+    for(auto& ind : population) {
+        for(int i = 0; i < 3; ++i) {
+            ind.genes.push_back({(float)(rand()%4000-2000), (float)(rand()%4000-2000), 0.0f});
+        }
+    }
 
-    for (int i = 0; i < num_sims; ++i) {
-        GameResult res = gm.run_single_simulation(i + 1, 1);
-        all_runs.push_back(res);
+    std::cout << "--- ЗАПУСК АНАЛІТИКИ ППО ---\n";
+    for(int g = 0; g < generations; ++g) {
+        for(auto& ind : population) evaluate(ind, 15.0f);
         
-        std::cout << "Simulation #" << res.sim_id << ": " << res.total_time_sec << " sec. Ourcome: " << res.outcome << std::endl;
-    }
+        std::sort(population.begin(), population.end(), [](auto& a, auto& b){ return a.fitness > b.fitness; });
+        
+        std::cout << "Gen " << g << " | Best Time: " << population[0].time << "s | " 
+                  << (population[0].captured ? "HIT" : "MISS") << "\n";
 
-    auto best_it = std::min_element(all_runs.begin(), all_runs.end(), 
-        [](const GameResult& a, const GameResult& b) {
-            return a.total_time_sec < b.total_time_sec;
-        });
-
-    if (best_it != all_runs.end()) {
-        std::cout << "\n--- Results ---" << std::endl;
-        std::cout << "Best time: " << best_it->total_time_sec << " sec(Simulation #" << best_it->sim_id << ")" << std::endl;
-        std::cout << "Best iterarions: " << best_it->iterations << std::endl;
+        for(int i = pop_size/2; i < pop_size; ++i) {
+            population[i] = population[i-pop_size/2];
+            for(auto& gene : population[i].genes) {
+                gene.x += (rand()%100-50);
+                gene.y += (rand()%100-50);
+            }
+        }
     }
-    } catch (std::exception e ) { std::cerr << e.what(); }
     return 0;
 }

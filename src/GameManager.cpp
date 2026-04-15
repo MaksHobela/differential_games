@@ -4,6 +4,8 @@
 #include <deque>
 #include <random>
 #include <stdexcept>
+#include <chrono>
+#include <thread>
 
 GameManager::GameManager(int num_p, int num_e, float capture_r)
     : capture_radius(capture_r) {
@@ -29,7 +31,7 @@ GameManager::GameManager(int num_p, int num_e, float capture_r)
     num_threads = std::max(2u, std::thread::hardware_concurrency());
 }
 
-GameResult GameManager::run_single_simulation(int id, int max_steps = 1000000) {
+GameResult GameManager::run_single_simulation(int id, int max_steps) {
     p_active = initial_pursuers;
     e_active = initial_escapers;
     
@@ -41,6 +43,7 @@ GameResult GameManager::run_single_simulation(int id, int max_steps = 1000000) {
         ++steps;
 
         std::vector<std::thread> threads;
+        // Передаємо вказівники на методи класу правильно
         launch_work(threads, &GameManager::process_pursuers, p_active.size());
         launch_work(threads, &GameManager::process_escapers, e_active.size());
 
@@ -54,9 +57,6 @@ GameResult GameManager::run_single_simulation(int id, int max_steps = 1000000) {
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = end - start;
 
-    size_t p_active_size = p_active.size();
-    size_t e_active_size = e_active.size();
-
     if (p_active.empty()) {
         return { id, diff.count(), steps, GameResult::outcomes[1]};
     } 
@@ -66,7 +66,6 @@ GameResult GameManager::run_single_simulation(int id, int max_steps = 1000000) {
     else {
         return { id, diff.count(), steps, GameResult::outcomes[2]};
     }
-    
 }
 
 void GameManager::launch_work(std::vector<std::thread>& threads, void (GameManager::*f)(size_t, size_t), size_t size) {
@@ -75,16 +74,16 @@ void GameManager::launch_work(std::vector<std::thread>& threads, void (GameManag
     
     size_t chunk = size / n;
     for (unsigned int i = 0; i < n; ++i) {
-        size_t start = i * chunk;
-        size_t end = (i == n - 1) ? size : start + chunk;
-        threads.emplace_back(f, this, start, end);
+        size_t start_idx = i * chunk;
+        size_t end_idx = (i == n - 1) ? size : start_idx + chunk;
+        threads.emplace_back(f, this, start_idx, end_idx);
     }
 }
 
 void GameManager::check_collisions() {
-    for (int i = p_active.size() - 1; i >= 0; --i) {
+    for (int i = static_cast<int>(p_active.size()) - 1; i >= 0; --i) {
         bool caught = false;
-        for (int j = e_active.size() - 1; j >= 0; --j) {
+        for (int j = static_cast<int>(e_active.size()) - 1; j >= 0; --j) {
             Coordinates cp = p_active[i].getCoordinates();
             Coordinates ce = e_active[j].getCoordinates();
 
@@ -109,16 +108,8 @@ void GameManager::process_pursuers(size_t s, size_t e) {
         auto pc = p_active[i].getCoordinates();
         auto ec = e_active[i % e_active.size()].getCoordinates();
 
-        p_active[i].my_coordinate = {
-            pc.x,
-            pc.y,
-            pc.z,
-        };
-        p_active[i].escaper_coordinate = {
-            ec.x,
-            ec.y,
-            ec.z,
-        };
+        p_active[i].my_coordinate = pc;
+        p_active[i].escaper_coordinate = ec;
 
         Vector esc_vector{
             ec.x - pc.x,

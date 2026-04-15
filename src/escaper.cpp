@@ -1,67 +1,88 @@
 #include "escaper.hpp"
+#include <cmath>
+#include <random>
+#include <vector>
 
 escaper::escaper(float x, float y, float z, float ve, int prob)
-    : position(x,y,z), v_e(ve), turn_prob(prob), theta(0.0f), phi(0.0f) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> azimuth(0.0f, 2.0f * static_cast<float>(M_PI));
-    std::uniform_real_distribution<float> elevation(-static_cast<float>(M_PI) / 2.0f, static_cast<float>(M_PI) / 2.0f);
-    theta = azimuth(gen);
-    phi = elevation(gen);
-}
+    : position(x, y, z), v_e(ve), turn_prob(prob), theta(0.0f), phi(0.0f),
+      last_theta(0.0f), smoothed_desired(0.0f) {}
 
-escaper::~escaper() {
+escaper::~escaper() {}
+
+void escaper::setData(float x, float y, float z, float ve) {
+    position = Coordinates(x, y, z);
+    v_e = ve;
+    last_theta = 0.0f;
+    smoothed_desired = 0.0f;
 }
 
 void escaper::calculate_trajectory(const std::deque<Coordinates>& pursuer_coords) {
-    const float dt = 0.1f;
-    position.x += v_e * dt * std::cos(phi) * std::cos(theta);
-    position.y += v_e * dt * std::cos(phi) * std::sin(theta);
-    position.z += v_e * dt * std::sin(phi);
+    std::vector<Coordinates> nearby;
+    for (const auto& p : pursuer_coords) {
+        Vector d = position.vectorTo(p);
+        if (d.length() < 5000.0f && d.length() > 0.1f) nearby.push_back(p);
+    }
+    if (nearby.empty()) return;
+
+    Vector new_dir(0, 0, 0);
+    if (nearby.size() == 1) {
+        Vector p_to_e = nearby[0].vectorTo(position);
+        new_dir = p_to_e;
+    } else if (nearby.size() == 2) {
+        Vector line = nearby[0].vectorTo(nearby[1]);
+        Vector perp(line.y, -line.x, 0.0f);
+        if (perp.length() < 0.1f) perp = Vector(1.0f, 0.0f, 0.0f);
+        new_dir = perp;
+    } else return;
+
+    Vector unit = new_dir.normalize();
+    float instant = std::atan2(unit.y, unit.x);
+
+    // === ДУЖЕ ПОВІЛЬНЕ ЗГЛАДЖУВАННЯ — максимум 0.3° за крок ===
+    float delta = instant - smoothed_desired;
+    delta = std::fmod(delta + 3.1415926535f, 6.283185307f) - 3.1415926535f;
+    if (delta > 0.0052f) delta = 0.0052f;   // 0.3°
+    if (delta < -0.0052f) delta = -0.0052f;
+
+    smoothed_desired += delta;
 }
 
 void escaper::turn(const std::deque<Coordinates>& pursuer_coords) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> dis(1, 100);
-    int n = dis(gen);
-    if (n < turn_prob) {
-        if (!pursuer_coords.empty()) {
-            float min_dist_sq = -1.0f;
-            float threat_x = 0.0f, threat_y = 0.0f, threat_z = 0.0f;
+    std::uniform_real_distribution<float> prob_dist(0.0f, 100.0f);
 
-            for (const auto& p : pursuer_coords) {
-                float dx = p.x - position.x;
-                float dy = p.y - position.y;
-                float dz = p.z - position.z;
-                float dist_sq = dx * dx + dy * dy + dz * dz;
-                if (min_dist_sq < 0.0f || dist_sq < min_dist_sq) {
-                    min_dist_sq = dist_sq;
-                    threat_x = p.x;
-                    threat_y = p.y;
-                    threat_z = p.z;
-                }
-            }
+    float delta = smoothed_desired - last_theta;
+    delta = std::fmod(delta + 3.1415926535f, 6.283185307f) - 3.1415926535f;
+    if (delta > 0.087f) delta = 0.087f;     // максимум 5° фактичний поворот
+    if (delta < -0.087f) delta = -0.087f;
 
-            float dx = threat_x - position.x;
-            float dy = threat_y - position.y;
-            float dz = threat_z - position.z;
-            float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    float new_theta = last_theta + delta;
 
-            theta = std::atan2(dy, dx) + static_cast<float>(M_PI);
-            phi = -std::asin(dz / dist);
-        } else {
-            std::uniform_real_distribution<float> azimuth(0.0f, 2.0f * static_cast<float>(M_PI));
-            std::uniform_real_distribution<float> elevation(-static_cast<float>(M_PI) / 2.0f, static_cast<float>(M_PI) / 2.0f);
-            theta = azimuth(gen);
-            phi = elevation(gen);
-        }
+    if (prob_dist(gen) < turn_prob) {
+        std::uniform_real_distribution<float> noise(-0.035f, 0.035f);
+        new_theta += noise(gen);
     }
-}
 
-void escaper::setData(float x, float y, float z, float ve) {
-    position.x = x;
-    position.y = y;
-    position.z = z;
-    v_e = ve;
+    theta = new_theta;
+    last_theta = theta;
+
+    std::uniform_real_distribution<float> pitch_noise(-0.017f, 0.017f);
+    phi += pitch_noise(gen) * 0.1f;
+    if (phi > 0.087f) phi = 0.087f;
+    if (phi < -0.087f) phi = -0.087f;
+
+    const float dt = 0.5f;
+    float cx = std::cos(theta) * std::cos(phi);
+    float cy = std::sin(theta) * std::cos(phi);
+    float cz = std::sin(phi);
+
+    Vector dir(cx, cy, cz);
+    float len = dir.length();
+    if (len > 0.0f) dir = dir * (1.0f / len);
+
+    position = position + dir * v_e * dt;
+
+    if (position.z > 1050.0f) position.z = 1050.0f;
+    if (position.z < 950.0f)  position.z = 950.0f;
 }

@@ -1,5 +1,5 @@
 #pragma once
-
+#include "escaper.hpp"
 #include "common.hpp"
 
 class Pursuer {
@@ -8,13 +8,19 @@ public:
     float v_p;
     float v_e;
     float beta;
+    int ID;
 
+    escaper my_escaper;
     Vector escaper_vector;
     Coordinates escaper_coordinate;
     Vector my_vector;
     Coordinates my_coordinate;
 
+    void setID(double ID);
+    int getID();
+    int getTargetID();
     void updateBeta();
+    void updateEscaper(escaper new_escaper);
     void calculate_new_circle(const Vector& escaper_vector);
     Coordinates get_Apoll_dots(const Coordinates& C);
     Coordinates interceptionPoint(const Coordinates& evader_pos);

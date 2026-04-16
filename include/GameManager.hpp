@@ -44,6 +44,7 @@ private:
     unsigned int num_threads;
     float capture_radius;
 
+    
     void launch_work(std::vector<std::thread>& threads, void (GameManager::*f)(size_t, size_t), size_t size);
     // void check_collisions();
     void check_collisions(std::vector<CaptureEvent>& capture_log);
@@ -54,6 +55,7 @@ private:
 
 public:
     GameManager(int num_p, int num_e, float capture_r);
+    void loadScenario(const std::string& filename, int strategy_type, float detection_dist);
     GameResult run_single_simulation(int id, int max_steps);
 };
 

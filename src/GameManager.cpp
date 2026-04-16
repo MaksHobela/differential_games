@@ -14,36 +14,56 @@
 #include <string>                                                       // Для назв типів (ДОДАНО)
 
 
-GameManager::GameManager(int num_p, int num_e, float capture_r)
-    : capture_radius(capture_r), pool(std::thread::hardware_concurrency()) {
-/**
- * Конструктор менеджера гри.
- * Валідує кількість гравців, ініціалізує позиції та створює пул потоків.
- */
-    if(num_p == 0 || num_e == 0 || num_p < num_e)                       // Перевірка на коректність вводу
-        throw std::runtime_error("Incorrect numbers");                  // Викидаємо помилку, якщо логіка порушена
+#include <fstream>
+#include <sstream>
 
-    initial_pursuers.resize(num_p);                                     // Виділяємо пам'ять під переслідувачів
-    initial_escapers.resize(num_e);                                     // Виділяємо пам'ять під втікачів
+// Додайте це в GameManager.hpp в секцію public
+// void loadScenario(const std::string& filename, int type, float dist_to_enemy);
 
-    std::random_device rd;                                              // Джерело випадковості
-    std::mt19937 gen(rd());                                             // Генератор Мерсенна
-    std::uniform_real_distribution<float> dist(0.0f, 200.0f);           // Діапазон координат 0-100
+void GameManager::loadScenario(const std::string& filename, int strategy_type, float detection_dist) {
+    // 1. Очищуємо поточні списки
+    initial_pursuers.clear();
+    initial_escapers.clear();
 
-    for (size_t i = 0; i < num_p; ++i) {                                // Ініціалізація переслідувачів
-        initial_pursuers[i].my_coordinate = {dist(gen), dist(gen), 0.0f}; // Випадкова точка
-        initial_pursuers[i].v_p = 2.0f;                                 // Швидкість переслідувача
-        initial_pursuers[i].v_e = 1.0f;                                 // Оцінка швидкості втікача
-        initial_pursuers[i].updateBeta();                               // Розрахунок коефіцієнта швидкостей
-        initial_pursuers[i].setID(i);                                   // Призначаємо унікальний ID
+    // 2. Ставимо втікачів (наприклад, "з півночі", Y = detection_dist)
+    // Розставляємо їх купкою або лінією на висоті 200
+    for (int i = 0; i < 3; ++i) {
+        escaper e(100.0f + (i * 20.0f), detection_dist, 200.0f);
+        e.setID(i);
+        initial_escapers.push_back(e);
     }
 
-    for (size_t i = 0; i < num_e; ++i) {                                // Ініціалізація втікачів
-        initial_escapers[i] = escaper(dist(gen), dist(gen), 200.0f);    // Початкова точка (Z=200)
-        initial_escapers[i].setID(i);                                   // Призначаємо унікальний ID
-    }
+    // 3. Стратегії розстановки переслідувачів (на Y = 0)
+    int num_p = 10; 
+    float center_x = 120.0f; // Центр відносно втікачів
+    float step = 30.0f;      // Відстань між перехоплювачами
 
-    num_threads = std::max(2u, std::thread::hardware_concurrency());    // Визначаємо кількість ядер
+    for (int i = 0; i < num_p; ++i) {
+        Pursuer p;
+        float x = 0, y = 0, z = 0;
+
+        if (strategy_type == 1) { // ЛІНІЯ
+            x = center_x + (i - num_p/2) * step;
+            y = 0;
+        } 
+        else if (strategy_type == 2) { // ШАХИ
+            x = center_x + (i - num_p/2) * step;
+            y = (i % 2 == 0) ? 0.0f : -step; // Другий ряд трохи глибше
+        }
+        else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
+            float angle = M_PI * (float)i / (num_p - 1); // від 0 до 180 градусів
+            float radius = 100.0f; // Радіус дуги
+            x = center_x - radius * std::cos(angle);
+            y = -radius * std::sin(angle); // Вигин у протилежний від ворога бік
+        }
+
+        p.my_coordinate = {x, y, 0.0f};
+        p.v_p = 2.0f;
+        p.v_e = 1.0f;
+        p.updateBeta();
+        p.setID(i);
+        initial_pursuers.push_back(p);
+    }
 }
 
 GameResult GameManager::run_single_simulation(int id, int max_steps) {

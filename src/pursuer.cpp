@@ -1,69 +1,50 @@
-#include <cmath>
 #include "pursuer.hpp"
+#include <cmath>
 
-void Pursuer::updateBeta() {
-    if (v_e != 0.0f) {
-        beta = v_p / v_e;
-    } else {
-        beta = 1.0f;
-    }
-}
-
-void Pursuer::calculate_new_circle(const Vector& escaper_vector) {
-    this->escaper_vector = escaper_vector;
-
-    float denominator = (beta - 1.0f) * (beta + 1.0f);
-    Vector r0 = my_coordinate.vectorTo(escaper_coordinate);
-    float r0_len = r0.length();
-
-    if (denominator != 0.0f) {
-        r_Apoll = (beta / denominator) * r0_len;
-        float c = r0_len / denominator;
-
-        Vector diff = my_coordinate.vectorTo(escaper_coordinate);
-        Vector centerVec = diff * (c / (r0_len != 0.0f ? r0_len : 1.0f));
-        Coordinates C = my_coordinate + centerVec;
-
-        get_Apoll_dots(C);
-    } 
-    
-}
-
-Coordinates Pursuer::get_Apoll_dots(const Coordinates& C) {
-    Vector d = escaper_coordinate.vectorTo(C);
-    Vector u = escaper_vector.normalize();
-
-    float du = d.dot(u);
-    float dd = d.dot(d);
-
-    float D = du * du - (dd - r_Apoll * r_Apoll);
-    if (D < 0.0f) {
-        return escaper_coordinate;
-    }
-
-    float t1 = -du - std::sqrt(D);
-    float t2 = -du + std::sqrt(D);
-
-    float t = (t1 > 0.0f) ? t1 : t2;
-    Vector res = my_coordinate.vectorTo(escaper_coordinate + u * t);
-    my_vector = res.normalize();
-    return escaper_coordinate + u * t;
-}
+void Pursuer::updateBeta() { beta = 0.0f; }
+void Pursuer::calculate_new_circle(const Vector& escaper_vector) { r_Apoll = 0.0f; }
+Coordinates Pursuer::get_Apoll_dots(const Coordinates& C) { return C; }
 
 Coordinates Pursuer::interceptionPoint(const Coordinates& evader_pos) {
-    return my_coordinate;
+    return evader_pos;
 }
 
-Coordinates Pursuer::getCoordinates() const {
-    return my_coordinate;
-}
+Coordinates Pursuer::getCoordinates() const { return my_coordinate; }
 
 void Pursuer::makeMove(float dt) {
-    my_coordinate = my_coordinate + my_vector * (v_p * dt);
+    Coordinates target = interceptionPoint(escaper_coordinate);
+    Vector desired = my_coordinate.vectorTo(target);
+    float len = desired.length();
+    if (len == 0.0f) return;
+
+    desired = desired.normalize() * v_p;
+
+    Vector current = my_vector;
+    float current_len = current.length();
+    if (current_len > 0.0f) current = current.normalize();
+
+    float dot = current.dot(desired);
+    dot = std::max(-1.0f, std::min(1.0f, dot));
+    float angle = std::acos(dot);
+
+    const float max_angle = 0.0262f;
+
+    if (angle > max_angle) {
+        Vector perp = desired - current * dot;
+        float perp_len = perp.length();
+        if (perp_len > 0.0f) {
+            perp = perp * (1.0f / perp_len);
+            desired = current * std::cos(max_angle) + perp * std::sin(max_angle);
+            desired = desired * v_p;
+        }
+    }
+
+    my_vector = desired;
+    my_coordinate = my_coordinate + desired * dt;
 }
 
 void Pursuer::setData(float x, float y, float z, float ve) {
     my_coordinate = Coordinates(x, y, z);
     v_e = ve;
+    my_vector = Vector(0, 0, 0);
 }
-

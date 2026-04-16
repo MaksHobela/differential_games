@@ -12,6 +12,8 @@ public:
 private:
     float theta;
     float phi;
+    float last_theta;
+    float smoothed_desired;
 
 public:
     escaper(float x = 0.0f, float y = 0.0f, float z = 0.0f, float ve = 1.0f, int prob = 30);

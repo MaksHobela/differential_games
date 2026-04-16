@@ -1,33 +1,48 @@
 #include "GameManager.hpp"
-#include <vector>
 #include <iostream>
-#include <algorithm>
 
-int main() {
-    int num_sims = 8; 
-    try {
-    GameManager gm(3, 1, 0.8f);
-    std::vector<GameResult> all_runs;
-
-    std::cout << "Starting " << num_sims << " simulations..." << std::endl;
-
-    for (int i = 0; i < num_sims; ++i) {
-        GameResult res = gm.run_single_simulation(i + 1, 1);
-        all_runs.push_back(res);
-        
-        std::cout << "Simulation #" << res.sim_id << ": " << res.total_time_sec << " sec. Ourcome: " << res.outcome << std::endl;
+int main(int argc, char* argv[]) {
+    int num_e = 1;
+    if (argc > 1) {
+        num_e = std::stoi(argv[1]);
+        if (num_e < 1) num_e = 1;
     }
 
-    auto best_it = std::min_element(all_runs.begin(), all_runs.end(), 
-        [](const GameResult& a, const GameResult& b) {
-            return a.total_time_sec < b.total_time_sec;
-        });
+    float capture_r = 50.0f;
+    int max_steps = 10000;
+    int test_sims = 10;
 
-    if (best_it != all_runs.end()) {
-        std::cout << "\n--- Results ---" << std::endl;
-        std::cout << "Best time: " << best_it->total_time_sec << " sec(Simulation #" << best_it->sim_id << ")" << std::endl;
-        std::cout << "Best iterarions: " << best_it->iterations << std::endl;
+    std::cout << "=== SIMULATION: " << num_e << " escapers ===\n";
+
+    int optimal_p = num_e;
+    bool found = false;
+
+    for (int np = num_e; np <= num_e + 5; ++np) {
+        GameManager gm(np, num_e, capture_r);
+        int wins = 0;
+
+        for (int s = 0; s < test_sims; ++s) {
+            GameResult r = gm.run_single_simulation(-1, max_steps);
+            if (r.outcome == "Pursuers have won") wins++;
+        }
+
+        float rate = static_cast<float>(wins) / test_sims * 100.0f;
+        std::cout << np << " Pursuers vs " << num_e << " escapers → " << rate << "% success\n";
+
+        if (rate >= 80.0f) {
+            optimal_p = np;
+            found = true;
+            break;
+        }
     }
-    } catch (std::exception e ) { std::cerr << e.what(); }
+
+    if (!found) {
+        std::cout << "Even with " << optimal_p << " Pursuer success is not enough\n";
+    }
+
+    std::cout << "\n=== OPTIMAL NUMBER OF PURSUERS: " << optimal_p << " ===\n";
+
+    GameManager gm_vis(optimal_p, num_e, capture_r);
+    gm_vis.run_single_simulation(0, max_steps);
     return 0;
 }

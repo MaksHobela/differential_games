@@ -4,7 +4,7 @@
 #include <algorithm>
 
 int main() {
-    int num_sims = 8; 
+    int num_sims = 2; 
     try {
     GameManager gm(10, 3, 0.8f);
     std::vector<GameResult> all_runs;
@@ -12,7 +12,7 @@ int main() {
     std::cout << "Starting " << num_sims << " simulations..." << std::endl;
 
     for (int i = 0; i < num_sims; ++i) {
-        GameResult res = gm.run_single_simulation(i + 1, 100000);
+        GameResult res = gm.run_single_simulation(i + 1, 10000);
         all_runs.push_back(res);
         
         std::cout << "Simulation #" << res.sim_id << ": " << res.total_time_sec << " sec. Ourcome: " << res.outcome << std::endl;

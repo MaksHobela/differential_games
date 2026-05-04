@@ -19,6 +19,17 @@
 
 // Додайте це в GameManager.hpp в секцію public
 // void loadScenario(const std::string& filename, int type, float dist_to_enemy);
+GameManager::GameManager(int num_p, int num_e, float capture_r)
+    : capture_radius(capture_r), 
+      count_p(num_p), // запам'ятовуємо 8
+      count_e(num_e), // запам'ятовуємо 5
+      num_threads(std::thread::hardware_concurrency()),
+      pool(std::thread::hardware_concurrency()) 
+{
+    // Обов'язково ініціалізуємо розміри, щоб вектори не були нульовими
+    initial_pursuers.resize(num_p);
+    initial_escapers.resize(num_e);
+}
 
 void GameManager::loadScenario(const std::string& filename, int strategy_type, float detection_dist) {
     // 1. Очищуємо поточні списки
@@ -27,39 +38,42 @@ void GameManager::loadScenario(const std::string& filename, int strategy_type, f
 
     // 2. Ставимо втікачів (наприклад, "з півночі", Y = detection_dist)
     // Розставляємо їх купкою або лінією на висоті 200
-    for (int i = 0; i < 3; ++i) {
-        escaper e(100.0f + (i * 20.0f), detection_dist, 200.0f);
+    for (int i = 0; i < count_e; ++i) {
+        escaper e(100.0f + (i * 50.0f), detection_dist, 200.0f, 50.0f);
         e.setID(i);
         initial_escapers.push_back(e);
     }
 
     // 3. Стратегії розстановки переслідувачів (на Y = 0)
-    int num_p = 10; 
+    // int num_p = 10; 
     float center_x = 120.0f; // Центр відносно втікачів
-    float step = 30.0f;      // Відстань між перехоплювачами
+    float step = 55.0f;      // Відстань між перехоплювачами
 
-    for (int i = 0; i < num_p; ++i) {
+    for (int i = 0; i < count_p; ++i) {
         Pursuer p;
         float x = 0, y = 0, z = 0;
 
         if (strategy_type == 1) { // ЛІНІЯ
-            x = center_x + (i - num_p/2) * step;
+            x = center_x + (i - count_p/2) * step;
             y = 0;
         } 
         else if (strategy_type == 2) { // ШАХИ
-            x = center_x + (i - num_p/2) * step;
+            x = center_x + (i - count_p/2) * step;
             y = (i % 2 == 0) ? 0.0f : -step; // Другий ряд трохи глибше
         }
         else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
-            float angle = M_PI * (float)i / (num_p - 1); // від 0 до 180 градусів
+            float angle = M_PI * (float)i / (count_p - 1); // від 0 до 180 градусів
             float radius = 100.0f; // Радіус дуги
             x = center_x - radius * std::cos(angle);
             y = -radius * std::sin(angle); // Вигин у протилежний від ворога бік
         }
 
-        p.my_coordinate = {x, y, 0.0f};
-        p.v_p = 2.0f;
-        p.v_e = 1.0f;
+        // p.my_coordinate = {x, y, 0.0f};
+        p.setData(x, y, 0.0f, 70);
+        // p.v_p = 2.0f;
+        // p.v_e = 1.0f;
+        p.v_p = 70.0f;
+        p.v_e = 50.0f;
         p.updateBeta();
         p.setID(i);
         initial_pursuers.push_back(p);
@@ -111,7 +125,7 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
                 Coordinates pc = p_active[i].getCoordinates();          // Власна позиція
                 Vector esc_vector{ ec.x - pc.x, ec.y - pc.y, ec.z - pc.z }; // Вектор на ціль
                 p_active[i].calculate_new_circle(esc_vector);           // Аполлоній
-                p_active[i].makeMove(2.0f);                             // Рух
+                p_active[i].makeMove(0.01f);                             // Рух
             });
 
             f_purs.wait();                                              // Бар'єр: чекаємо переслідувачів
@@ -150,7 +164,7 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
                 Vector real_velocity = it->getVelocityVector();          // Справжній вектор цілі
                 
                 purs.calculate_new_circle(real_velocity);                // Розрахунок перехоплення
-                purs.makeMove(2.0f);                                     // Рух
+                purs.makeMove(0.01f);                                     // Рух
             } else {
                 // Якщо ціль зникла (збита іншим), перерозподіляємо цілі
                 assignTargetsBalanced(); 
@@ -174,60 +188,130 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
 
     logger.saveToCSV("simulation_log.csv");                             // ЗБЕРЕЖЕННЯ ФАЙЛУ (ДОДАНО)
 
+    // auto finish_time = get_current_time_fenced();
+    // auto total_duration = finish_time - start_time;
+    // double final_time_sec = std::chrono::duration<double>(total_duration).count();
+
+    // if (p_active.empty()) return { id, final_time_sec, steps, GameResult::outcomes[1], capture_log}; // Перемога втікачів
+    // if (e_active.empty()) return { id, final_time_sec, steps, GameResult::outcomes[0], capture_log}; // Перемога переслідувачів
+    // return { id, final_time_sec, steps, GameResult::outcomes[2], capture_log};         // Нічия
     auto finish_time = get_current_time_fenced();
     auto total_duration = finish_time - start_time;
     double final_time_sec = std::chrono::duration<double>(total_duration).count();
 
-    if (p_active.empty()) return { id, final_time_sec, steps, GameResult::outcomes[1], capture_log}; // Перемога втікачів
-    if (e_active.empty()) return { id, final_time_sec, steps, GameResult::outcomes[0], capture_log}; // Перемога переслідувачів
-    return { id, final_time_sec, steps, GameResult::outcomes[2], capture_log};         // Нічия
+    // 1. ПІДРАХУНОК РЕЗУЛЬТАТІВ (БЕЗ ДУБЛЮВАННЯ)
+    int escaped_count = 0;
+    for (const auto& event : capture_log) {
+        if (event.pursuer_id == -1) {
+            escaped_count++;
+        }
+    }
+    int captured_count = (int)capture_log.size() - escaped_count;
+
+    // 2. ФОРМУВАННЯ ДИНАМІЧНОГО РЕЗУЛЬТАТУ
+    std::string final_status;
+    if (escaped_count == count_e) {
+        final_status = "Escapers Victory (All " + std::to_string(escaped_count) + " breached)";
+    } else if (escaped_count > 0) {
+        final_status = "Partial Breach (" + std::to_string(escaped_count) + " escaped, " 
+                       + std::to_string(captured_count) + " captured)";
+    } else if (captured_count == count_e) {
+        final_status = "Pursuers Victory (All intercepted)";
+    } else {
+        final_status = "Draw / Timeout (Remaining on field)";
+    }
+
+    // Повертаємо об'єкт з нашим детальним статусом
+    return { id, final_time_sec, steps, final_status, capture_log };
 }
 
-void GameManager::check_collisions(std::vector<CaptureEvent>& capture_log) {
-/**
- * Перевірка колізій та розумний перерозподіл цілей.
- * Якщо втікача збито, перераховуємо цілі тільки для тих, хто за ним гнався.
- */
-    for (int i = (int)p_active.size() - 1; i >= 0; --i) {               // Йдемо по переслідувачах з кінця
-        bool caught = false;                                            // Чи спіймав цей бот когось
-        Coordinates cp = p_active[i].getCoordinates();                  // Позиція переслідувача
+// void GameManager::check_collisions(std::vector<CaptureEvent>& capture_log) {
+// /**
+//  * Перевірка колізій та розумний перерозподіл цілей.
+//  * Якщо втікача збито, перераховуємо цілі тільки для тих, хто за ним гнався.
+//  */
+//     for (int i = (int)p_active.size() - 1; i >= 0; --i) {               // Йдемо по переслідувачах з кінця
+//         bool caught = false;                                            // Чи спіймав цей бот когось
+//         Coordinates cp = p_active[i].getCoordinates();                  // Позиція переслідувача
         
-        for (int j = (int)e_active.size() - 1; j >= 0; --j) {           // Йдемо по втікачах
-            Coordinates cee = e_active[j].getCoordinates();              // Позиція втікача
-            float distance = cp.vectorTo(cee).length();                  // Відстань між ними
+//         for (int j = (int)e_active.size() - 1; j >= 0; --j) {           // Йдемо по втікачах
+//             Coordinates cee = e_active[j].getCoordinates();              // Позиція втікача
+//             float distance = cp.vectorTo(cee).length();                  // Відстань між ними
 
-            if (distance < capture_radius) {                            // Якщо колізія
-                capture_log.push_back({
-                    p_active[i].getID(),        // ID переслідувача
-                    e_active[j].getID(),        // ID втікача 
-                    cee.x, cee.y, cee.z         // Координата перехоплення                                                
-                });
-                int dead_escaper_id = e_active[j].getID();
-                e_active.erase(e_active.begin() + j); // ВИДАЛЯЄМО ВТІКАЧА       
+//             if (distance < capture_radius) {                            // Якщо колізія
+//                 capture_log.push_back({
+//                     p_active[i].getID(),        // ID переслідувача
+//                     e_active[j].getID(),        // ID втікача 
+//                     cee.x, cee.y, cee.z         // Координата перехоплення                                                
+//                 });
+//                 int dead_escaper_id = e_active[j].getID();
+//                 e_active.erase(e_active.begin() + j); // ВИДАЛЯЄМО ВТІКАЧА       
                 
-                for (size_t p_idx = 0; p_idx < p_active.size(); ++p_idx) { // МИТТЄВИЙ ПЕРЕРОЗПОДІЛ
-                    if (p_active[p_idx].getTargetID() == dead_escaper_id && (int)p_idx != i) {
-                        float min_dist = 1e9;
-                        int best_target_idx = -1;
+//                 for (size_t p_idx = 0; p_idx < p_active.size(); ++p_idx) { // МИТТЄВИЙ ПЕРЕРОЗПОДІЛ
+//                     if (p_active[p_idx].getTargetID() == dead_escaper_id && (int)p_idx != i) {
+//                         float min_dist = 1e9;
+//                         int best_target_idx = -1;
 
-                        for (size_t target_idx = 0; target_idx < e_active.size(); ++target_idx) {
-                            float d = p_active[p_idx].getCoordinates().vectorTo(e_active[target_idx].getCoordinates()).length();
-                            if (d < min_dist) {
-                                min_dist = d;
-                                best_target_idx = (int)target_idx;
-                            }
-                        }
+//                         for (size_t target_idx = 0; target_idx < e_active.size(); ++target_idx) {
+//                             float d = p_active[p_idx].getCoordinates().vectorTo(e_active[target_idx].getCoordinates()).length();
+//                             if (d < min_dist) {
+//                                 min_dist = d;
+//                                 best_target_idx = (int)target_idx;
+//                             }
+//                         }
 
-                        if (best_target_idx != -1) {
-                            p_active[p_idx].updateEscaper(e_active[best_target_idx]);
-                        }
-                    }
+//                         if (best_target_idx != -1) {
+//                             p_active[p_idx].updateEscaper(e_active[best_target_idx]);
+//                         }
+//                     }
+//                 }
+//                 caught = true;
+//                 break; 
+//             }
+//         }
+//         if (caught) { p_active.erase(p_active.begin() + i); }
+//     }
+// }
+void GameManager::check_collisions(std::vector<CaptureEvent>& capture_log) {
+    // Йдемо одним циклом по втікачах (з кінця, бо видаляємо)
+    for (int j = (int)e_active.size() - 1; j >= 0; --j) {
+        Coordinates cee = e_active[j].getCoordinates();
+        int esc_id = e_active[j].getID();
+        bool removed = false;
+
+        // 1. ПЕРЕВІРКА ПРОРИВУ (Y < -10)
+        if (cee.y < -10.0f) {
+            capture_log.push_back({-1, esc_id, cee.x, cee.y, cee.z});
+            removed = true;
+        } 
+        else {
+            // 2. ПЕРЕВІРКА ПЕРЕХОПЛЕННЯ (тільки якщо не прорвався)
+            for (int i = (int)p_active.size() - 1; i >= 0; --i) {
+                float dist = p_active[i].getCoordinates().vectorTo(cee).length();
+                
+                if (dist < capture_radius) {
+                    capture_log.push_back({p_active[i].getID(), esc_id, cee.x, cee.y, cee.z});
+                    p_active.erase(p_active.begin() + i); // Переслідувач "витрачений"
+                    removed = true;
+                    break; // Цього втікача вже збито, виходимо з циклу переслідувачів
                 }
-                caught = true;
-                break; 
             }
         }
-        if (caught) { p_active.erase(p_active.begin() + i); }
+
+        // Якщо втікача збито або він прорвався — видаляємо його і оновлюємо цілі
+        if (removed) {
+            e_active.erase(e_active.begin() + j);
+            
+            // Перевіряємо, чи хтось із переслідувачів залишився без цілі
+            bool need_reassign = false;
+            for (const auto& purs : p_active) {
+                if (purs.getTargetID() == esc_id) {
+                    need_reassign = true;
+                    break;
+                }
+            }
+            if (need_reassign) assignTargetsBalanced();
+        }
     }
 }
 
@@ -240,7 +324,7 @@ void GameManager::process_pursuers(size_t s, size_t e) {
         Coordinates ec = p_active[i].escaper_coordinate;                // Позиція цілі
         Vector esc_vector{ ec.x - pc.x, ec.y - pc.y, ec.z - pc.z };      // Розрахунок вектору
         p_active[i].calculate_new_circle(esc_vector);                   // Математика Аполлонія
-        p_active[i].makeMove(2.0f);                                     // Крок
+        p_active[i].makeMove(0.01f);                                     // Крок
     }
 }
 

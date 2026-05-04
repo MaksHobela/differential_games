@@ -8,47 +8,72 @@ escaper::escaper(float x, float y, float z, float ve, int prob)
     : position(x, y, 200.0f), v_e(ve), turn_prob(prob), theta(0.0f), phi(0.0f) {
     last_theta = 0.0f;
     smoothed_desired = 0.0f;
+    
+    // Рандомний вибір стратегії при створенні
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> d(0, 1);
+    // current_strategy = (d(gen) == 0) ? Strategy::EVASIVE : Strategy::ZIGZAG;
+    current_strategy = Strategy::ZIGZAG;
+    
+    // Початковий напрямок (наприклад, вздовж осі Y)
+    // base_theta = M_PI / 2.0f; 
+    base_theta = -M_PI/2; 
 }
 
 void escaper::calculate_trajectory(const std::deque<Coordinates>& pursuer_coords) {
-    // Зберігаємо попередню позицію для переслідувачів
     priv_pos = position;
+    const float dt = 0.01f;
 
-    // 1. Пошук найближчих загроз (радіус 5000 одиниць)
-    std::vector<Coordinates> nearby;
-    for (const auto& p : pursuer_coords) {
-        float d = position.vectorTo(p).length();
-        if (d < 5000.0f && d > 0.1f) nearby.push_back(p);
-    }
+    if (current_strategy == Strategy::EVASIVE) {
+        // --- СТРАТЕГІЯ 1: УХИЛЕННЯ ВІД ЗАГРОЗ (Твій оригінальний код) ---
+        std::vector<Coordinates> nearby;
+        for (const auto& p : pursuer_coords) {
+            float d = position.vectorTo(p).length();
+            if (d < 500.0f && d > 0.1f) nearby.push_back(p);
+        }
 
-    if (nearby.empty()) return;
+        if (nearby.empty()) {
+            smoothed_desired = base_theta; // Тримаємо курс, якщо порожньо
+            return;
+        }
 
-    // 2. Вибір стратегічного напрямку
-    Vector new_dir(0, 0, 0);
-    if (nearby.size() == 1) {
-        // Втікаємо прямо від одного
-        new_dir = nearby[0].vectorTo(position);
+        Vector new_dir(0, 0, 0);
+        if (nearby.size() == 1) {
+            new_dir = nearby[0].vectorTo(position);
+        } else {
+            Vector line = nearby[0].vectorTo(nearby[1]);
+            Vector perp(line.y, -line.x, 0.0f);
+            if (perp.length() < 0.1f) perp = Vector(1.0f, 0.0f, 0.0f);
+            new_dir = perp;
+        }
+
+        Vector unit = new_dir.normalize();
+        float instant_target_theta = std::atan2(unit.y, unit.x);
+
+        float delta = instant_target_theta - smoothed_desired;
+        delta = std::fmod(delta + M_PI, 2.0f * M_PI) - M_PI;
+        
+        float max_smooth = 0.0072f; // 0.3 градуси (0.0052 рад — це ближче до твоїх 0.3)
+        if (delta > max_smooth) delta = max_smooth;
+        if (delta < -max_smooth) delta = -max_smooth;
+
+        smoothed_desired += delta;
+
     } else {
-        // Якщо двоє і більше — шукаємо перпендикуляр до загрози
-        Vector line = nearby[0].vectorTo(nearby[1]);
-        Vector perp(line.y, -line.x, 0.0f);
-        if (perp.length() < 0.1f) perp = Vector(1.0f, 0.0f, 0.0f);
-        new_dir = perp;
+        // --- СТРАТЕГІЯ 2: ЗИГЗАГ (За твоїми розрахунками) ---
+        zigzag_timer += dt;
+        
+        // Визначаємо фазу (ліворуч чи праворуч)
+        // Якщо час в межах [0, T_half] — один бік, [T_half, 2*T_half] — інший
+        bool phase = (std::fmod(zigzag_timer, 2.0f * T_half) < T_half);
+        
+        if (phase) {
+            smoothed_desired = base_theta + alpha_rad;
+        } else {
+            smoothed_desired = base_theta - alpha_rad;
+        }
     }
-
-    Vector unit = new_dir.normalize();
-    float instant_target_theta = std::atan2(unit.y, unit.x);
-
-    // 3. Дуже повільне згладжування бажаного напрямку (0.3 градуси)
-    float delta = instant_target_theta - smoothed_desired;
-    // Нормалізація кута (щоб не крутитись на 360)
-    delta = std::fmod(delta + M_PI, 2.0f * M_PI) - M_PI;
-    
-    float max_smooth = 0.0052f; // 0.3 градуси в радіанах
-    if (delta > max_smooth) delta = max_smooth;
-    if (delta < -max_smooth) delta = -max_smooth;
-
-    smoothed_desired += delta;
 }
 
 // Додай у public секцію класу escaper:
@@ -92,7 +117,7 @@ void escaper::turn(const std::deque<Coordinates>& pursuer_coords) {
     if (phi < -0.087f) phi = -0.087f;
 
     // 4. Фізичне оновлення позиції
-    const float dt = 0.1f; // Використовуємо твій крок часу
+    const float dt = 0.01f; // Використовуємо твій крок часу
     float cx = std::cos(theta) * std::cos(phi);
     float cy = std::sin(theta) * std::cos(phi);
     float cz = std::sin(phi);

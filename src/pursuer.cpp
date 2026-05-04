@@ -33,10 +33,33 @@ int Pursuer::getTargetID(){
     }
     return -1;
 }
+int Pursuer::getTargetID() const{
+    if (this->my_escaper != nullptr) {
+        return (int)this->my_escaper->getID(); // Звернення через ->
+    }
+    return -1;
+}
 
 void Pursuer::calculate_new_circle(const Vector& escaper_vector) {
     this->escaper_vector = escaper_vector;
 
+    if (current_strategy == InterceptStrategy::VERTICAL_FIRST && !height_reached) {
+        float height_diff = escaper_coordinate.z - my_coordinate.z;
+
+        if (std::abs(height_diff) > 1.0f) {
+            // Створюємо фіктивну точку прямо над переслідувачем на висоті втікача
+            // Coordinates climbPoint = my_coordinate;
+            // climbPoint.z = escaper_coordinate.z;
+            
+            // applySmoothTurn(climbPoint, true);
+            // return; // Виходимо, не рахуємо Аполлонія поки що
+            this->my_vector = Vector(0.0f, 0.0f, 1.0f); 
+            return;
+        } else {
+            height_reached = true; // Висоти досягнуто, тепер працюємо як зазвичай
+        }
+    }
+    
     // Розрахунок beta^2 - 1
     float beta2 = beta * beta;
     float denominator = beta2 - 1.0f;
@@ -93,12 +116,64 @@ Coordinates Pursuer::get_Apoll_dots(const Coordinates& C) {
 
     // Точка зустрічі: X = E + u * t
     Coordinates meetingPoint = escaper_coordinate + u * t;
+    applySmoothTurn(meetingPoint);
 
     // Встановлюємо вектор руху переслідувача на цю точку
-    Vector res = my_coordinate.vectorTo(meetingPoint);
-    my_vector = res.normalize();
+    // Vector res = my_coordinate.vectorTo(meetingPoint);
+    my_vector.normalize();
 
     return meetingPoint;
+}
+
+void Pursuer::applySmoothTurn(const Coordinates& targetPoint, bool ignore_pitch_limit) {
+    // 1. Поточні кути з my_vector
+    float current_theta = std::atan2(my_vector.y, my_vector.x); // Азимут (XY)
+    float current_pitch = std::asin(my_vector.z / (v_p > 0.001f ? 1.0f : 1.0f)); 
+    // Оскільки my_vector нормалізований, його довжина 1, тому pitch = asin(z)
+
+    // 2. Ідеальні кути до точки перехоплення
+    Vector dir = my_coordinate.vectorTo(targetPoint);
+    float dist = dir.length();
+    
+    if (dist < 0.01f) return; // Ми вже в цілі
+
+    float target_theta = std::atan2(dir.y, dir.x);
+    float target_pitch = std::asin(dir.z / dist);
+
+    // 3. Розрахунок дельти для обох кутів
+    auto normalize_angle = [](float a) {
+        float res = std::fmod(a + M_PI, 2.0f * M_PI);
+        if (res < 0) res += 2.0f * M_PI;
+        return res - M_PI;
+    };
+
+    float delta_theta = normalize_angle(target_theta - current_theta);
+    float delta_pitch = target_pitch - current_pitch; // Pitch зазвичай в межах [-PI/2, PI/2]
+
+    // 4. Обмеження повороту (max_smooth)
+    float rotation_speed = 0.0052f; // радіан на секунду
+    float up_speed = 0.042f;
+    // float limit = rotation_speed ;
+
+    // Обмежуємо азимут
+    if (std::abs(delta_theta) > rotation_speed) 
+        delta_theta = (delta_theta > 0) ? rotation_speed : -rotation_speed;
+    
+    // Обмежуємо нахил (висоту)
+    if (!ignore_pitch_limit) {
+        if (std::abs(delta_pitch) > up_speed) 
+            delta_pitch = (delta_pitch > 0) ? up_speed : -up_speed;
+    }
+    // 5. Оновлення вектора через сферичні координати
+    float new_theta = current_theta + delta_theta;
+    float new_pitch = current_pitch + delta_pitch;
+
+    // Математичний перехід назад у Декартові координати (XYZ)
+    my_vector.x = std::cos(new_pitch) * std::cos(new_theta);
+    my_vector.y = std::cos(new_pitch) * std::sin(new_theta);
+    my_vector.z = std::sin(new_pitch);
+
+    // Вектор залишається нормалізованим автоматично через властивості sin/cos
 }
 
 // void Pursuer::calculate_new_circle(const Vector& escaper_vector) {
@@ -158,7 +233,7 @@ Coordinates Pursuer::get_Apoll_dots(const Coordinates& C) {
 
 void Pursuer::interceptionPoint(const Coordinates& evader_pos) {
 /**
- * @brief Заглушка для розрахунку точки перехоплення.
+ * @brief 
  * @param evader_pos Позиція об'єкта, що уникає перехоплення.
  * @return Поточні координати (поки не реалізовано повноцінно).
  */
@@ -194,4 +269,14 @@ void Pursuer::setData(float x, float y, float z, float ve) {
  */
     my_coordinate = Coordinates(x, y, z);                               // Встановлення початкової або нової позиції
     v_e = ve;                                                           // Оновлення відомої швидкості втікача
+
+    // this->current_strategy = (std::rand() % 2 == 0) 
+    //                          ? InterceptStrategy::DIRECT_APOLLONIUS 
+    //                          : InterceptStrategy::VERTICAL_FIRST;
+
+    this->current_strategy = InterceptStrategy::VERTICAL_FIRST;
+    
+    this->height_reached = false;
+
+    // my_vector = Vector(0.0f, 0.0f, 1.0f);
 }

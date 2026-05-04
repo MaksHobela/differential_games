@@ -10,7 +10,7 @@ class Pursuer;
 class escaper {
 public:
     // Виносимо Strategy всередину класу
-    enum class Strategy { EVASIVE, ZIGZAG };
+    enum class Strategy { EVASIVE, ZIGZAG, SMART_ZIGZAG };
 
     escaper(float x = 0, float y = 0, float z = 200.0f, float ve = 1.0f, int prob = 20);
     ~escaper();
@@ -28,6 +28,8 @@ public:
     Vector getVelocityVector() const;
     
     Coordinates getCoordinates() const { return position; }
+    void run_zigzag_logic(float dt);
+    void run_evasive_logic(const std::vector<Coordinates>& nearby);
 
 private:
     Coordinates position;
@@ -48,7 +50,7 @@ private:
 
     // Константи (однакові для всіх об'єктів)
     static constexpr float alpha_rad = 0.4363f; // 25 градусів
-    static constexpr float T_half = 1.82f;     // Напівперіод
+    static constexpr float T_half = 3.82f;     // Напівперіод
 
     std::vector<Pursuer*> my_persuers; 
 };

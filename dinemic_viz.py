@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 
-def animate_simulation():
+def animate_simulation(filename, fileout):
     try:
-        df = pd.read_csv('simulation_log.csv')
+        df = pd.read_csv(filename)
     except:
         print("Файл не знайдено. Спочатку запусти C++ програму.")
         return
@@ -37,8 +37,11 @@ def animate_simulation():
         points[f'p_{pid}'] = point
 
     # Налаштування осей (беремо мінімуми/максимуми з усіх даних)
-    ax.set_xlim(df['x'].min(), df['x'].max())
-    ax.set_ylim(df['y'].min(), df['y'].max())
+    # ax.set_xlim(df['x'].min(), df['x'].max())
+    # ax.set_ylim(df['y'].min(), df['y'].max())
+    # ax.set_zlim(0, df['z'].max() + 50)
+    ax.set_xlim(-50, 1000)
+    ax.set_ylim(-1000, 1000)
     ax.set_zlim(0, df['z'].max() + 50)
     
     ax.set_xlabel('X (м)')
@@ -82,7 +85,7 @@ def animate_simulation():
         # Використовуємо ffmpeg як райтер. 
         # fps=20 (кількість кадрів на секунду)
         # bitrate=1800 (якість відео)
-        ani.save('simulation_video.mp4', writer='ffmpeg', fps=20, bitrate=1800)
+        ani.save(fileout, writer='ffmpeg', fps=20, bitrate=1800)
         print("Відео успішно збережено як 'simulation_video.mp4'")
     except Exception as e:
         print(f"Помилка при збереженні: {e}")
@@ -92,4 +95,6 @@ def animate_simulation():
     # plt.savefig("graph.mp4")
 
 if __name__ == "__main__":
-    animate_simulation()
+    animate_simulation('log_Arc.csv', 'Arc_vid.mp4')
+    # animate_simulation('log_Chess.csv', 'Chess_vid.mp4')
+    # animate_simulation('log_Line.csv', 'Line_vid.mp4')

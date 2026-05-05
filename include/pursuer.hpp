@@ -38,5 +38,5 @@ public:
     Coordinates getCoordinates() const;
     void makeMove(float dt);
 
-    void setData(float x, float y, float z, float ve);
+    void setData(float x, float y, float z, float vp, float ve);
 };

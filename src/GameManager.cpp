@@ -31,49 +31,52 @@ GameManager::GameManager(int num_p, int num_e, float capture_r)
     initial_escapers.resize(num_e);
 }
 
-void GameManager::loadScenario(const std::string& filename, int strategy_type, float detection_dist) {
+void GameManager::loadScenario(int num_pursuers, int strategy_type, const std::vector<CoordPack>& escaper_coords) {
     // 1. Очищуємо поточні списки
     initial_pursuers.clear();
     initial_escapers.clear();
 
     // 2. Ставимо втікачів (наприклад, "з півночі", Y = detection_dist)
     // Розставляємо їх купкою або лінією на висоті 200
-    for (int i = 0; i < count_e; ++i) {
-        escaper e(100.0f + (i * 50.0f), detection_dist, 200.0f, 50.0f);
+    for (int i = 0; i < escaper_coords.size(); ++i) {
+        escaper e(escaper_coords[i].x, escaper_coords[i].y, escaper_coords[i].z, 50.0f);
         e.setID(i);
         initial_escapers.push_back(e);
     }
 
     // 3. Стратегії розстановки переслідувачів (на Y = 0)
     // int num_p = 10; 
-    float center_x = 120.0f; // Центр відносно втікачів
-    float step = 55.0f;      // Відстань між перехоплювачами
+    const float p_width = 2000.0f;
+    const float p_start_x = 50.0f;
+    const float p_center_x = p_start_x + (p_width / 2.0f);
+    const float p_step = p_width / (num_pursuers - 1);
 
-    for (int i = 0; i < count_p; ++i) {
-        Pursuer p;
+    for (int i = 0; i < num_pursuers; ++i) {
         float x = 0, y = 0, z = 0;
 
         if (strategy_type == 1) { // ЛІНІЯ
-            x = center_x + (i - count_p/2) * step;
+            x = p_center_x + (i - count_p/2) * p_step;
             y = 0;
         } 
         else if (strategy_type == 2) { // ШАХИ
-            x = center_x + (i - count_p/2) * step;
-            y = (i % 2 == 0) ? 0.0f : -step; // Другий ряд трохи глибше
+            x = p_center_x + (i - count_p/2) * p_step;
+            y = (i % 2 == 0) ? 0.0f : -p_step; // Другий ряд трохи глибше
         }
         else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
             float angle = M_PI * (float)i / (count_p - 1); // від 0 до 180 градусів
             float radius = 100.0f; // Радіус дуги
-            x = center_x - radius * std::cos(angle);
+            x = p_center_x - radius * std::cos(angle);
             y = -radius * std::sin(angle); // Вигин у протилежний від ворога бік
         }
 
         // p.my_coordinate = {x, y, 0.0f};
-        p.setData(x, y, 0.0f, 70);
+        
+        Pursuer p;
+        p.setData(x, y, 0.0f, 70, 50);
         // p.v_p = 2.0f;
         // p.v_e = 1.0f;
-        p.v_p = 70.0f;
-        p.v_e = 50.0f;
+        // p.v_p = 70.0f;
+        // p.v_e = 50.0f;
         p.updateBeta();
         p.setID(i);
         initial_pursuers.push_back(p);

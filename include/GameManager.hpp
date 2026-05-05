@@ -15,6 +15,15 @@
 #include "escaper.hpp"
 #include "BS_thread_pool.hpp"
 
+struct CoordPack {
+    float x, y, z;
+};
+
+struct Scenario {
+    std::string type;
+    std::vector<CoordPack> coords;
+};
+
 // Подія захоплення
 struct CaptureEvent {
     int pursuer_id;
@@ -77,7 +86,7 @@ public:
     GameManager(int num_p, int num_e, float capture_r);
     
     // Завантаження сценарію розстановки (Лінія, Шахи, Півмісяць)
-    void loadScenario(const std::string& filename, int strategy_type, float detection_dist);
+    void loadScenario(int num_pursuers, int strategy_type, const std::vector<CoordPack>& escaper_coords);
     
     // Запуск одного циклу симуляції
     GameResult run_single_simulation(int id, int max_steps);

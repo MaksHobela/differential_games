@@ -259,7 +259,7 @@ void Pursuer::makeMove(float dt) {
     my_coordinate = my_coordinate + my_vector * (v_p * dt);             // Нова позиція = Стара позиція + (Напрямок * Швидкість * Час)
 }
 
-void Pursuer::setData(float x, float y, float z, float ve) {
+void Pursuer::setData(float x, float y, float z, float vp, float ve) {
 /**
  * @brief Встановлення базових параметрів переслідувача.
  * @param x Координата X.
@@ -268,6 +268,7 @@ void Pursuer::setData(float x, float y, float z, float ve) {
  * @param ve Швидкість втікача (необхідна для розрахунку beta).
  */
     my_coordinate = Coordinates(x, y, z);                               // Встановлення початкової або нової позиції
+    v_p = vp;   
     v_e = ve;                                                           // Оновлення відомої швидкості втікача
 
     // this->current_strategy = (std::rand() % 2 == 0) 

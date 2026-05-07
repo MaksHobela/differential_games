@@ -61,18 +61,45 @@ void escaper::calculate_trajectory(const std::deque<Coordinates>& pursuer_coords
         smoothed_desired += delta;
 
     } else {
-        // --- СТРАТЕГІЯ 2: ЗИГЗАГ (За твоїми розрахунками) ---
         zigzag_timer += dt;
         
-        // Визначаємо фазу (ліворуч чи праворуч)
-        // Якщо час в межах [0, T_half] — один бік, [T_half, 2*T_half] — інший
-        bool phase = (std::fmod(zigzag_timer, 2.0f * T_half) < T_half);
+        // Додаємо невеликий дрейф до base_theta, щоб ескейпер все ж трохи відвертав від рою
+        // навіть під час зигзагу (Гібридна логіка)
+        Vector flee_dir(0, 0, 0);
+        for (const auto& p : pursuer_coords) {
+            float d = position.vectorTo(p).length();
+            if (d < 300.0f) flee_dir = flee_dir + position.vectorTo(p).normalize() * (300.0f - d);
+        }
+        if (flee_dir.length() > 0.1f) {
+            float target_flee = std::atan2(flee_dir.y, flee_dir.x);
+            // Плавне підлаштування базового курсу
+            base_theta += (target_flee - base_theta) * 0.01f; 
+        }
+
+        // Рандомізований зигзаг
+        float current_T_half = T_half + std::sin(zigzag_timer * 0.5f) * 0.2f; // Період трохи дихає
+        bool phase = (std::fmod(zigzag_timer, 2.0f * current_T_half) < current_T_half);
+        
+        // Рандомізація кута в момент зміни фази
+        float noise = (std::sin(zigzag_timer * 10.0f)) * 0.05f; 
         
         if (phase) {
-            smoothed_desired = base_theta + alpha_rad;
+            smoothed_desired = base_theta + alpha_rad + noise;
         } else {
-            smoothed_desired = base_theta - alpha_rad;
+            smoothed_desired = base_theta - alpha_rad - noise;
         }
+        // // --- СТРАТЕГІЯ 2: ЗИГЗАГ (За твоїми розрахунками) ---
+        // zigzag_timer += dt;
+        
+        // // Визначаємо фазу (ліворуч чи праворуч)
+        // // Якщо час в межах [0, T_half] — один бік, [T_half, 2*T_half] — інший
+        // bool phase = (std::fmod(zigzag_timer, 2.0f * T_half) < T_half);
+        
+        // if (phase) {
+        //     smoothed_desired = base_theta + alpha_rad;
+        // } else {
+        //     smoothed_desired = base_theta - alpha_rad;
+        // }
     }
 }
 

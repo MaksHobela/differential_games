@@ -3,14 +3,11 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 #include "GameManager.hpp"
 #include "TimerUtils.hpp"
 
-// Структура для зберігання сценарію з його типом
-// struct Scenario {
-//     std::string type;
-//     std::vector<CoordPack> coords;
-// };
+namespace fs = std::filesystem;
 
 // Функція парсингу рядка CSV у структуру Scenario
 Scenario parseLineToScenario(const std::string& line) {
@@ -18,13 +15,9 @@ Scenario parseLineToScenario(const std::string& line) {
     std::stringstream ss(line);
     std::string segment;
 
-    // 1. Зчитуємо тип (wedge, swarm, stairs, random)
     if (!std::getline(ss, sc.type, ',')) return sc;
-    
-    // 2. Пропускаємо scenario_id
-    std::getline(ss, segment, ',');
+    std::getline(ss, segment, ','); // пропуск id
 
-    // 3. Зчитуємо координати втікачів
     while (std::getline(ss, segment, ',')) {
         std::stringstream space_ss(segment);
         float x, y, z;
@@ -35,7 +28,6 @@ Scenario parseLineToScenario(const std::string& line) {
     return sc;
 }
 
-// Функція зчитування всіх сценаріїв у пам'ять
 std::vector<Scenario> read_all_scenarios(const std::string& filename) {
     std::vector<Scenario> all_scenarios;
     std::ifstream file(filename);
@@ -55,63 +47,73 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // Масиви для зручного запису імен у CSV
-    std::vector<std::string> strategy_names = {"", "Line", "Chess", "Arc"};
+    std::string mode = "--stats"; 
+    if (argc > 1) mode = argv[1];
 
-    // Зчитуємо сценарії (всі процеси роблять це паралельно з одного файлу)
-    auto scenarios = read_all_scenarios("../escaper_scenarios.csv");
+    std::vector<std::string> strategy_names = {"", "Line", "Chess", "Arc"};
+    auto scenarios = read_all_scenarios("../2000_escaper_scenarios.csv");
 
     if (scenarios.empty()) {
-        if (rank == 0) std::cerr << "Error: No scenarios loaded! Check file path." << std::endl;
+        if (rank == 0) std::cerr << "Error: No scenarios loaded!" << std::endl;
         MPI_Finalize();
         return 1;
     }
 
-    // int min_np = 8;
-    // int max_np = 25;
-
     std::vector<int> np_values;
-    // Твої старі та нові значення
-    for (int i = 26; i <= 50; ++i) np_values.push_back(i);
-    // Стрибки: 30, 40, 50... 100
-    // for (int i = 30; i <= 50; i += 10) np_values.push_back(i);
-    for (int i = 60; i <= 100; i += 10) np_values.push_back(i);
+    if (mode == "--surgical"){
+        for (int i = 8; i <= 40; ++i) np_values.push_back(i);
+    } else {
+        for (int i = 8; i <= 50; ++i) np_values.push_back(i);
+        for (int i = 60; i <= 100; i += 10) np_values.push_back(i);
+    }
+    
 
-    // --- ПОЧАТОК ВИМІРЮВАННЯ ЗАГАЛЬНОГО ЧАСУ ---
-    MPI_Barrier(MPI_COMM_WORLD); // Чекаємо, поки всі процеси будуть готові
+    int target_sc_id = 0;
+
+    MPI_Barrier(MPI_COMM_WORLD);
     auto start_time = get_current_time_fenced();
 
-    // Цикл розподілу навантаження: кожен rank бере свої значення Np
+    // ГОЛОВНИЙ ЦИКЛ ПО NP
     for (int i = rank; i < (int)np_values.size(); i += world_size) {
         int np = np_values[i];
-        
-        // Час для конкретного блоку (Np)
+
+        if (mode == "--surgical") {
+            std::string folder = "surgical_viz/np_" + std::to_string(np);
+            if (rank == 0) fs::create_directories(folder);
+            // MPI_Barrier(MPI_COMM_WORLD);
+
+            // for (int st = 1; st <= 3; ++st) {
+                std::string log_path = folder + "/move_" + ".csv";
+                GameManager gm(np, 10, 1.0f);
+                gm.loadScenario(np, 3, scenarios[target_sc_id].coords);
+                gm.run_single_simulation(target_sc_id, 10000, log_path);
+            // }
+            if (rank == 0) std::cout << "[Surgical] Done Np=" << np << std::endl;
+            continue; // Йдемо на наступну ітерацію циклу FOR (до наступного NP)
+        }
+
+        // --- ЦЕЙ БЛОК ТЕПЕР ВСЕРЕДИНІ ЦИКЛУ FOR ---
         auto block_start = get_current_time_fenced();
+
+        std::string folder_name = "sim_logs/np_" + std::to_string(np);
+        if (mode != "--stats" && rank == 0) {
+            fs::create_directories(folder_name);
+        }
 
         std::stringstream ss;
         ss << "results_np_" << np << ".csv"; 
         std::ofstream out(ss.str());
-        
-        // Заголовок CSV: додано колонку EscaperType
         out << "Np,Strategy,EscaperType,ScenarioID,Captures,SimTime,Outcome\n";
 
         for (int st = 1; st <= 3; ++st) {
             for (int sc_id = 0; sc_id < (int)scenarios.size(); ++sc_id) {
-                
-                // Ініціалізація симуляції
                 GameManager gm(np, 10, 1.0f); 
                 gm.loadScenario(np, st, scenarios[sc_id].coords); 
                 
-                // Запуск математичного ядра
-                GameResult res = gm.run_single_simulation(sc_id, 10000);
+                GameResult res = gm.run_single_simulation(sc_id, 10000, "");
                 
-                // Запис результату
-                out << np << "," 
-                    << strategy_names[st] << "," 
-                    << scenarios[sc_id].type << "," 
-                    << sc_id << "," 
-                    << res.captures.size() << "," 
-                    << res.total_time_sec << "," 
+                out << np << "," << strategy_names[st] << "," << scenarios[sc_id].type << "," 
+                    << sc_id << "," << res.captures.size() << "," << res.total_time_sec << "," 
                     << res.outcome << "\n";
             }
         }
@@ -119,13 +121,10 @@ int main(int argc, char** argv) {
 
         auto block_end = get_current_time_fenced();
         double block_duration = to_us(block_end - block_start) / 1000000.0;
-        
-        std::cout << "[Rank " << rank << "] Finished Np=" << np 
-                  << " | Time: " << block_duration << " s" << std::endl;
-    }
+        std::cout << "[Rank " << rank << "] Finished Np=" << np << " | Time: " << block_duration << " s" << std::endl;
+    } // <--- ОСЬ ЦЯ ДУЖКА МАЄ БУТИ ТУТ (Кінець циклу FOR)
 
-    // --- ЗАВЕРШЕННЯ ВИМІРЮВАННЯ ---
-    MPI_Barrier(MPI_COMM_WORLD); // Чекаємо найповільнішого
+    MPI_Barrier(MPI_COMM_WORLD); 
     auto end_time = get_current_time_fenced();
 
     if (rank == 0) {

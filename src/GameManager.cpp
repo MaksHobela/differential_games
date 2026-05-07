@@ -47,8 +47,10 @@ void GameManager::loadScenario(int num_pursuers, int strategy_type, const std::v
     // 3. Стратегії розстановки переслідувачів (на Y = 0)
     // int num_p = 10; 
     const float p_width = 2000.0f;
+    const float p_leng = 1000.0f;
     const float p_start_x = 50.0f;
     const float p_center_x = p_start_x + (p_width / 2.0f);
+    const float p_center_y = (p_leng / 2.0f);
     const float p_step = p_width / (num_pursuers - 1);
 
     for (int i = 0; i < num_pursuers; ++i) {
@@ -60,14 +62,33 @@ void GameManager::loadScenario(int num_pursuers, int strategy_type, const std::v
         } 
         else if (strategy_type == 2) { // ШАХИ
             x = p_center_x + (i - count_p/2) * p_step;
-            y = (i % 2 == 0) ? 0.0f : -p_step; // Другий ряд трохи глибше
+            y = (i % 2 == 0) ? 0.0f : -50.0f; // Другий ряд трохи глибше
         }
-        else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
-            float angle = M_PI * (float)i / (count_p - 1); // від 0 до 180 градусів
-            float radius = 100.0f; // Радіус дуги
-            x = p_center_x - radius * std::cos(angle);
-            y = -radius * std::sin(angle); // Вигин у протилежний від ворога бік
+        else if (strategy_type == 3) {
+                // Дуга: кут від PI (ліворуч) до 0 (праворуч)
+                float angle = M_PI - (M_PI * (float)i / (count_p - 1));
+                // Розраховуємо x відносно центру (1050)
+                x = p_center_x + (p_width / 2.0f) * std::cos(angle);
+                y = 492.40-500 * std::sin(angle);
+            
+            // else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
+            // float total_span = 2000.0f; // Тепер відповідає масштабу твоїх графіків
+            // float radius = total_span / 2.0f; 
+            
+            // // Розподіляємо кут від 0 до PI
+            // float angle = M_PI * (float)i / (count_p - 1);
+            
+            // // Центруємо арку відносно p_center_x
+            // // cos дасть розмах від -1000 до +1000, що в сумі дасть 2000м
+            // x = p_center_x + radius * std::cos(angle);
+            // y = p_center_y - radius * std::sin(angle); 
         }
+        // else if (strategy_type == 3) { // ПІВМІСЯЦЬ (Дуга)
+        //     float angle = M_PI * (float)i / (count_p - 1); // від 0 до 180 градусів
+        //     float radius = 1000.0f; // Радіус дуги
+        //     x = p_center_x - radius * std::cos(angle);
+        //     y = -radius * std::sin(angle); // Вигин у протилежний від ворога бік
+        // }
 
         // p.my_coordinate = {x, y, 0.0f};
         
@@ -83,12 +104,13 @@ void GameManager::loadScenario(int num_pursuers, int strategy_type, const std::v
     }
 }
 
-GameResult GameManager::run_single_simulation(int id, int max_steps) {
+GameResult GameManager::run_single_simulation(int id, int max_steps, std::string log_filename) {
 /**
  * Головний цикл симуляції.
  * Вибирає стратегію паралелізму залежно від кількості об'єктів.
  */
     Logger logger; // Ініціалізація логера (ДОДАНО)
+    bool enable_logging = !log_filename.empty();
 
     p_active = initial_pursuers;                                        // Копіюємо початковий стан переслідувачів
     e_active = initial_escapers;                                        // Копіюємо початковий стан втікачів
@@ -102,6 +124,10 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
     for (int s = 0; s < max_steps; ++s) {                               // Цикл життя симуляції
         if (p_active.empty() || e_active.empty()) break;                // Вихід, якщо хтось переміг
         ++steps;                                                        // Рахуємо крок
+        if (enable_logging) {
+            for(const auto& esc : e_active) logger.log(s, esc.getID(), "escaper", esc.getCoordinates());
+            for(const auto& purs : p_active) logger.log(s, purs.getID(), "pursuer", purs.getCoordinates());
+        }
 
         // ЗАПИС КООРДИНАТ ДЛЯ ВІЗУАЛІЗАЦІЇ (ДОДАНО)
         for(const auto& esc : e_active) logger.log(s, esc.getID(), "escaper", esc.getCoordinates());
@@ -113,27 +139,27 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
         p_coords.reserve(p_active.size());                              // Оптимізуємо пам'ять
         for(const auto& p : p_active) p_coords.push_back(p.getCoordinates()); // Копіюємо поточні позиції
 
-        if (total_agents > 50) {                                        // СТРАТЕГІЯ: ТРЕДПУЛ
-            auto f_esc = pool.submit_loop(0u, e_active.size(), [this, &p_coords](size_t i) {
-                std::deque<Coordinates> dq(p_coords.begin(), p_coords.end()); // Координати для втікача
-                e_active[i].calculate_trajectory(dq);                   // Рахуємо шлях
-                e_active[i].turn(dq);                                   // Робимо поворот
-                e_active[i].sentPursuersPrivPosition();                 // ПЕРЕДАЄМО ДАНІ ПЕРЕСЛІДУВАЧАМ (NEW)
-                });
+        // if (total_agents > 50) {                                        // СТРАТЕГІЯ: ТРЕДПУЛ
+        //     auto f_esc = pool.submit_loop(0u, e_active.size(), [this, &p_coords](size_t i) {
+        //         std::deque<Coordinates> dq(p_coords.begin(), p_coords.end()); // Координати для втікача
+        //         e_active[i].calculate_trajectory(dq);                   // Рахуємо шлях
+        //         e_active[i].turn(dq);                                   // Робимо поворот
+        //         e_active[i].sentPursuersPrivPosition();                 // ПЕРЕДАЄМО ДАНІ ПЕРЕСЛІДУВАЧАМ (NEW)
+        //         });
 
-            f_esc.wait();
+        //     f_esc.wait();
 
-            auto f_purs = pool.submit_loop(0u, p_active.size(), [this](size_t i) {
-                Coordinates ec = p_active[i].escaper_coordinate;        // Беремо координату закріпленої цілі
-                Coordinates pc = p_active[i].getCoordinates();          // Власна позиція
-                Vector esc_vector{ ec.x - pc.x, ec.y - pc.y, ec.z - pc.z }; // Вектор на ціль
-                p_active[i].calculate_new_circle(esc_vector);           // Аполлоній
-                p_active[i].makeMove(0.01f);                             // Рух
-            });
+        //     auto f_purs = pool.submit_loop(0u, p_active.size(), [this](size_t i) {
+        //         Coordinates ec = p_active[i].escaper_coordinate;        // Беремо координату закріпленої цілі
+        //         Coordinates pc = p_active[i].getCoordinates();          // Власна позиція
+        //         Vector esc_vector{ ec.x - pc.x, ec.y - pc.y, ec.z - pc.z }; // Вектор на ціль
+        //         p_active[i].calculate_new_circle(esc_vector);           // Аполлоній
+        //         p_active[i].makeMove(0.01f);                             // Рух
+        //     });
 
-            f_purs.wait();                                              // Бар'єр: чекаємо переслідувачів
-        } 
-        else {
+        //     f_purs.wait();                                              // Бар'єр: чекаємо переслідувачів
+        // } 
+        // else {
             // --- ПОСЛІДОВНИЙ РЕЖИМ (Serial) ---
             std::deque<Coordinates> dq(p_coords.begin(), p_coords.end());
             for (auto& esc : e_active) {
@@ -172,7 +198,6 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
                 // Якщо ціль зникла (збита іншим), перерозподіляємо цілі
                 assignTargetsBalanced(); 
             }
-        }
             // for (auto& purs : p_active) {
             //     // 1. Отримуємо об'єкт утікача, за яким закріплений цей переслідувач
             //     // Припустимо, у тебе в pursuer є вказівник my_escaper
@@ -189,7 +214,10 @@ GameResult GameManager::run_single_simulation(int id, int max_steps) {
         check_collisions(capture_log);                                  // Перевірка зіткнень
     }
 
-    logger.saveToCSV("simulation_log.csv");                             // ЗБЕРЕЖЕННЯ ФАЙЛУ (ДОДАНО)
+    // logger.saveToCSV("simulation_log.csv");                             // ЗБЕРЕЖЕННЯ ФАЙЛУ (ДОДАНО)
+    if (enable_logging) {
+        logger.saveToCSV(log_filename);
+    }
 
     // auto finish_time = get_current_time_fenced();
     // auto total_duration = finish_time - start_time;

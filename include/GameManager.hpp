@@ -89,7 +89,8 @@ public:
     void loadScenario(int num_pursuers, int strategy_type, const std::vector<CoordPack>& escaper_coords);
     
     // Запуск одного циклу симуляції
-    GameResult run_single_simulation(int id, int max_steps);
+    // GameResult run_single_simulation(int id, int max_steps);
+    GameResult run_single_simulation(int id, int max_steps, std::string log_filename);
 };
 
 

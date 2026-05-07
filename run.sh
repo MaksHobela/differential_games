@@ -20,8 +20,8 @@ fi
 echo ">> Компіляція..."
 make -j$(nproc) # Використовуємо всі ядра для швидкої збірки
 
-echo ">> Запуск паралельної симуляції на $NUM_PROCS процесах..."
-mpirun -np $NUM_PROCS ./program
+# echo ">> Запуск паралельної симуляції на $NUM_PROCS процесах..."
+# mpirun -np $NUM_PROCS ./program
 
 
 # #!/bin/bash

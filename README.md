@@ -1,5 +1,0 @@
-Run:
-```
-cmake . && make
-./program
-```
